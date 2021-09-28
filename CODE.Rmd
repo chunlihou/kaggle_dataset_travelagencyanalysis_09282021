@@ -697,6 +697,6 @@ Firstly, we know the acceptance rate in each feature without a significant test 
 
 # 7 Reference
 
-- [Dataset / 2021 / Susant_Achary](https://t.ly/D1k2t.ly/lGEW)
+- [Dataset / 2021 / Susant Achary](https://t.ly/kDBf)
 - [Reference / 2021 / Dionisius Widjayanto](https://t.ly/D1k2)
-- [Analysis / 2021 / bioedu19](https://t.ly/fzqq)
+- [Analysis / 2021 / Bio Edu](https://t.ly/fzqq)
