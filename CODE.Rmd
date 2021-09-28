@@ -1,0 +1,702 @@
+---
+title: "Travel Agency Analysis"
+author: "Chun-Li Hou"
+date: "`r format(Sys.time(), '%B %d, %Y')`"
+output: 
+  html_document:
+    code_folding: hide
+    toc: true
+    toc_depth: 3
+    number_sections: false
+    theme: united
+    highlight: tango
+---
+
+```{r setup, include = F}
+knitr::opts_chunk$set(echo = TRUE, 
+                      message = FALSE, 
+                      warning = FALSE, 
+                      fig.align = "center")
+```
+
+# 1 Objective
+
+The travel agency has many products and services. To reach the customer, the travel agency has to do some effort to promote its products and services. As for a traditional method, the company will call all of the customers to offer the new products or services. As for a data analytic method, we can help the marketing and sales department to optimize the opportunity to get customers from a call.
+
+# 2 Preparation
+
+Let us set up the environment and load in the dataset.
+
+## Environment
+
+```{r}
+if(!require("pacman")) install.packages("pacman")
+pacman::p_load(readr, skimr, tidyr, dplyr, ggplot2, gghalves, car,
+               scales, gridExtra, ggsci, stringr, caret, olsrr, MASS,
+               corrplot, RColorBrewer, ROSE, e1071, kableExtra, tibble,
+               ggridges, grid)
+
+theme = theme_bw() +
+  theme(plot.title = element_text(face = "bold", size = 15),
+        plot.subtitle = element_text(size = 10),
+        axis.title = element_text(size = 10), 
+        legend.position = "none")
+```
+
+## Dataset
+
+```{r}
+df.0 = read_csv("DATA.csv")
+```
+
+## Clean & Manipulation
+
+```{r}
+df.1 = df.0
+
+df.1 = df.1 %>%
+  drop_na() %>% 
+  dplyr::select(-CustomerID) %>% 
+  mutate_at(c("TypeofContact",
+              "Occupation",
+              "Gender",
+              "ProductPitched",
+              "MaritalStatus",
+              "Designation", 
+              "Passport",
+              "OwnCar",
+              "ProdTaken"), 
+            factor) %>% 
+  mutate(Gender = gsub("Fe Male",
+                       "Female",
+                       Gender),
+         Gender = as.factor(Gender)) %>% 
+  mutate(Often = ifelse(NumberOfTrips >= 4, 1, 0),
+         Often = as.factor(Often))
+```
+
+We process some data manipulations at first for better data analysis later.
+
+- Deselect uninformative variables
+- Format variable types
+- Correct error in variables
+- Group values based on an elbow method
+
+```{r}
+skim_without_charts(df.1)
+```
+
+# 3 Exploring Data Analysis
+
+## 1) What is the acceptance in each feature?
+
+```{r, fig.width = 14, fig.height = 5}
+p.1 = df.1 %>% 
+  ggplot(aes(x = TypeofContact, y = 1, fill = ProdTaken)) +
+  geom_col(position = "fill") + 
+  theme +
+  scale_x_discrete(labels = function(x) str_wrap(x, width = 10)) +  
+  scale_fill_locuszoom() +
+  labs(x = "Contact Type",
+       y = "Rate",
+       fill = "Offer Taken")
+p.2 = df.1 %>% 
+  ggplot(aes(x = Occupation, y = 1, fill = ProdTaken)) +
+  geom_col(position = "fill") + 
+  theme +
+  scale_x_discrete(labels = function(x) str_wrap(x, width = 10)) +
+  scale_fill_locuszoom() +
+  labs(x = "Occupation",
+       y = "Rate",
+       fill = "Offer Taken")
+p.3 = df.1 %>% 
+  ggplot(aes(x = Gender, y = 1, fill = ProdTaken)) +
+  geom_col(position = "fill") + 
+  theme +
+  scale_fill_locuszoom() +
+  labs(x = "Gender",
+       y = "Rate",
+       fill = "Offer Taken")
+p.4 = df.1 %>% 
+  ggplot(aes(x = ProductPitched, y = 1, fill = ProdTaken)) +
+  geom_col(position = "fill") + 
+  theme +
+  scale_x_discrete(labels = function(x) str_wrap(x, width = 10)) +
+  scale_fill_locuszoom() +
+  labs(x = "Product Type",
+       y = "Rate",
+       fill = "Offer Taken")
+p.5 = df.1 %>% 
+  ggplot(aes(x = MaritalStatus, y = 1, fill = ProdTaken)) +
+  geom_col(position = "fill") + 
+  theme +
+  scale_fill_locuszoom() +
+  labs(x = "Marital Status",
+       y = "Rate",
+       fill = "Offer Taken")
+p.6 = df.1 %>% 
+  ggplot(aes(x = Passport, y = 1, fill = ProdTaken)) +
+  geom_col(position = "fill") + 
+  theme +
+  scale_fill_locuszoom() +
+  labs(x = "Passport",
+       y = "Rate",
+       fill = "Offer Taken")
+p.7 = df.1 %>% 
+  ggplot(aes(x = OwnCar, y = 1, fill = ProdTaken)) +
+  geom_col(position = "fill") + 
+  theme +
+  scale_fill_locuszoom() +
+  labs(x = "Own Car",
+       y = "Rate",
+       fill = "Offer Taken")
+p.8 = df.1 %>% 
+  ggplot(aes(x = Designation, y = 1, fill = ProdTaken)) +
+  geom_col(position = "fill") + 
+  theme +
+  scale_x_discrete(labels = function(x) str_wrap(x, width = 10)) +
+  theme(legend.position = c(0.83, 0.74)) +
+  scale_fill_locuszoom() +
+  labs(x = "Designation",
+       y = "Rate",
+       fill = "Offer Taken")
+
+grid.arrange(p.1, p.2, p.3, p.4, p.5, p.6, p.7, p.8,
+             layout_matrix = rbind(c(6, 7, 3, 5),
+                                   c(1, 2, 4, 8)),
+             top = textGrob("Categorical Features",
+                            gp = gpar(fontsize = 15,
+                                      font = 2)))
+```
+
+We will kind of know that customers who have a passport, are single, work as free lancer, are introduced to the basic type of product, and work at the position of an executive are the high acceptance rate, which can be our targeted audience for the next product promotion.
+
+```{r, fig.width = 14, fig.height = 5}
+p.1 = df.1 %>%
+  ggplot(aes(y = Age, x = "", fill = ProdTaken)) +
+  geom_boxplot() +
+  theme +
+  theme(axis.ticks.x = element_blank()) +
+  scale_fill_locuszoom() +
+  labs(x = NULL)
+p.2 = df.1 %>%
+  ggplot(aes(y = CityTier, x = "", fill = ProdTaken)) +
+  geom_boxplot() +
+  theme +
+  theme(axis.ticks.x = element_blank()) +
+  scale_fill_locuszoom() +
+  labs(x = NULL)
+p.3 =df.1 %>% 
+  ggplot(aes(y = DurationOfPitch, x = "", fill = ProdTaken)) +
+  geom_boxplot() +
+  theme +
+  theme(axis.ticks.x = element_blank()) +
+  scale_fill_locuszoom() +
+  labs(x = NULL)
+p.4 = df.1 %>% 
+  ggplot(aes(y = NumberOfPersonVisiting, x = "", fill = ProdTaken)) +
+  geom_boxplot() +
+  theme +
+  theme(axis.ticks.x = element_blank()) +
+  scale_fill_locuszoom() +
+  labs(x = NULL)
+p.5 = df.1 %>% 
+  ggplot(aes(y = NumberOfFollowups, x = "", fill = ProdTaken)) +
+  geom_boxplot() +
+  theme +
+  theme(axis.ticks.x = element_blank()) +
+  scale_fill_locuszoom() +
+  labs(x = NULL)
+p.6 = df.1 %>% 
+  ggplot(aes(y = PreferredPropertyStar, x = "", fill = ProdTaken)) +
+  geom_boxplot() +
+  theme +
+  theme(axis.ticks.x = element_blank()) +
+  scale_fill_locuszoom() +
+  labs(x = NULL)
+p.7 = df.1 %>% 
+  ggplot(aes(y = NumberOfTrips, x = "", fill = ProdTaken)) +
+  geom_boxplot() +
+  theme +
+  theme(axis.ticks.x = element_blank()) +
+  scale_fill_locuszoom() +
+  labs(x = NULL)
+p.8 = df.1 %>% 
+  ggplot(aes(y = PitchSatisfactionScore, x = "", fill = ProdTaken)) +
+  geom_boxplot() +
+  theme +
+  theme(axis.ticks.x = element_blank(),
+        legend.position = c(0.80, 0.78)) +
+  scale_fill_locuszoom() +
+  labs(x = NULL)
+p.9 = df.1 %>% 
+  ggplot(aes(y = NumberOfChildrenVisiting, x = "", fill = ProdTaken)) +
+  geom_boxplot() +
+  theme +
+  theme(axis.ticks.x = element_blank()) +
+  scale_fill_locuszoom() +
+  labs(x = NULL)
+p.10 = df.1 %>% 
+  ggplot(aes(y = MonthlyIncome, x = "", fill = ProdTaken)) +
+  geom_boxplot() +
+  theme +
+  scale_y_continuous(labels = function(x) paste0("$", {x/1000}, "k")) +  
+  theme(axis.ticks.x = element_blank()) +
+  scale_fill_locuszoom() +
+  labs(x = NULL)
+
+grid.arrange(p.1, p.2, p.3, p.4, p.5, p.6, p.7, p.8, p.9, p.10,
+             layout_matrix = rbind(c(1, 10, 7, 2, 6),
+                                   c(4, 9, 3, 5, 8)),
+             top = textGrob("Continuous Features",
+                            gp = gpar(fontsize = 15,
+                                      font = 2)))
+```
+
+As for the continuous features, we find out that the higher the preferred property star, duration of pitch, and the number of follow-ups, the more acceptance rate for customers to the product. The next time of promotion, we should try to increase the duration of the pitch and the number of follow-ups to boost up the acceptance rate.
+
+## 2) What kind of customer would accept the product?
+
+```{r, fig.width = 8, fig.height = 5}
+p.1 = df.1 %>% 
+  group_by(Often) %>% 
+  summarise(mean = mean(MonthlyIncome)) %>% 
+  ggplot(aes(x = Often,
+             y = mean,
+             fill = Often)) +
+  geom_col(position = "dodge",
+           width = 0.7) +
+  geom_text(aes(label = paste0("$",
+                               prettyNum(round(mean, 0), 
+                                         big.mark = ","))),
+            vjust = -0.5) +
+  scale_y_continuous(labels = dollar_format(),
+                     breaks = seq(20000, 25000, 2500)) +
+  coord_cartesian(ylim = c(20000, 25000)) +
+  scale_fill_locuszoom() +
+  theme +
+  labs(title = "Often/Rarely Trip Customer",
+       x = "Often Trip",
+       y = "Monthly Income")
+
+p.2 = df.1 %>% 
+  group_by(ProdTaken) %>% 
+  summarise(mean = mean(MonthlyIncome)) %>% 
+  ggplot(aes(x = ProdTaken,
+             y = mean,
+             fill = ProdTaken)) +
+  geom_col(position = "dodge",
+           width = 0.7) +
+  geom_text(aes(label = paste0("$",
+                               prettyNum(round(mean, 0), 
+                                         big.mark = ","))),
+            vjust = -0.5) +
+  scale_y_continuous(labels = dollar_format(),
+                     breaks = seq(20000, 25000, 2500)) +
+  coord_cartesian(ylim = c(20000, 25000)) +
+  scale_fill_locuszoom() +
+  theme +
+  labs(title = "Offer Taken Customer",
+       x = "Offer taken",
+       y = "")
+
+grid.arrange(p.1, p.2,
+             layout_matrix = rbind(c(1,2)))
+```
+
+Customers who accept the product have a lower monthly income than those who reject the product, which does not follow the common statement that customers who have a higher monthly income more often travel than those who have a lower monthly income.
+
+## 3) What kind of package is taken by the customer in popular?
+
+```{r, fig.width = 8, fig.height = 5}
+df.1 %>% 
+  dplyr::select(ProdTaken, ProductPitched) %>% 
+  group_by(ProductPitched, ProdTaken) %>% 
+  summarise(count = n()) %>% 
+  mutate(per = count/sum(count)*100) %>% 
+  ggplot(aes(x = reorder(ProductPitched, -count),
+             y = count,
+             fill = ProdTaken))+
+  geom_col(position = "dodge",
+           width = 0.7) +
+  geom_text(aes(label = paste0(round(per, 0), "%")),
+            position = position_dodge(width = 0.7),
+            vjust = -0.5) + 
+  scale_y_continuous(limits = c(0, 1400),
+                     breaks = seq(0, 1400, 200)) +
+  scale_fill_locuszoom() +
+  theme +
+  theme(legend.position = "right") +
+  labs(title = "Customer Number by Package by Offer Taken Status",
+       x = "Package",
+       y = "Number of Customer",
+       fill = "Offer Taken")
+```
+
+Most package offer taken by customers is basic, deluxe, and standard. Also, the basic package is the highest probability that customers take the product. The overall probability that customers accept the product is 20%. The basic package acceptance rate is above the average overall.
+
+## 4) What are the positions which the customer accept the offer?
+
+```{r, fig.width = 8, fig.height = 5}
+df.1 %>% 
+  filter(Often == 1) %>% 
+  dplyr::select(MonthlyIncome, Occupation, Designation, Often) %>% 
+  mutate(Position = paste0(Designation, " at ", Occupation)) %>% 
+  group_by(Position) %>% 
+  summarise(mean = mean(MonthlyIncome)) %>% 
+  ggplot(aes(y = reorder(Position, mean),
+             x = mean)) +
+  geom_col(position = "dodge",
+           width = 0.7,
+           fill = "#9632B8FF") +
+  scale_x_continuous(labels = dollar_format(),
+                     breaks = seq(0, 35000, 5000)) +
+  coord_cartesian(xlim = c(15000, 35000)) +
+  scale_fill_locuszoom() +
+  theme +
+  labs(title = "Taken Offer Customer Number by Position",
+       x = "Monthly Income",
+       y = "Position")
+```
+
+The highest monthly income is the position of VP at salaried which means government employees. The executive at free lancer has the lowest monthly income.
+
+# 4 Statistical Analysis
+
+## 1) Do often travelers have a higher monthly income?
+
+The people who often travel are more financially free. This is the hypothesis that we will justify with a statistical test in this section.
+
+```{r, fig.width = 8, fig.height = 5}
+temp.4.1 = df.1 %>% 
+  group_by(Often) %>% 
+  mutate(count = n(),
+         x.lab = paste0(Often,
+                        "\n",
+                        "(n=",
+                        count,
+                        ")")) %>% 
+  dplyr::select(MonthlyIncome, Often, count, x.lab)
+
+title = "Monthly Income Distribution by Group of Rarely/Often Trip"
+ggplot(data = temp.4.1,
+       aes(x = x.lab,
+           y = MonthlyIncome)) +
+  geom_half_violin(side = "l",
+                   alpha = 0.5,
+                   trim = F,
+                   fill = "#D62728FF") +
+  geom_half_boxplot(side = "r",
+                    alpha = 0.5,
+                    fill = "#FF7F0EFF") +
+  stat_summary(fun = "mean", 
+               shape = 4, 
+               color = "black",
+               size = 0.5,
+               stroke = 2) +
+  scale_y_continuous(labels = dollar_format()) +  
+  theme +
+  labs(title = title,
+       x = "Often Trip",
+       y = "Monthly Income")
+```
+
+**Normality Test - Shapiro Wilk Test**
+
+```{r}
+by(temp.4.1$MonthlyIncome,
+   temp.4.1$Often,
+   shapiro.test)
+```
+
+**Homogeneity of Variance Test - Levene’s Test**
+
+```{r}
+leveneTest(temp.4.1$MonthlyIncome,
+           temp.4.1$Often)
+```
+
+**ANOVA Test - Kruskal Wallis Test**
+
+Since the dataset is non-normally distributed and non-equal variance, we will use Mann Whitney test instead of the original ANOVA test.
+
+```{r}
+wilcox.test(temp.4.1$MonthlyIncome ~
+              temp.4.1$Often)
+```
+
+The result supports the statement that people who have a higher monthly income are more often travelers with a p-value < 0.05.
+
+# 5 Machine Learning Analysis
+
+## 1) Which customers are more likely to accept the travel package?
+
+We will use logistic regression in this section to discuss. So, we can not only know the prediction result from the model, but also we can have the causation analysis. Therefore, we can predict which customers are more likely to accept the travel package and which variables are most significant.
+
+```{r}
+set.seed(123)
+split = createDataPartition(df.1$ProdTaken, p = 0.8, list = F)
+train.data = df.1[split, ]
+test.data = df.1[-split, ]
+
+mod.4.1 = glm(data = train.data,
+              ProdTaken ~ 
+                MonthlyIncome +
+                Designation +
+                OwnCar + 
+                Passport +
+                PreferredPropertyStar + 
+                DurationOfPitch + 
+                CityTier +
+                Age +
+                NumberOfFollowups + 
+                NumberOfChildrenVisiting +
+                PitchSatisfactionScore,
+              family = "binomial")
+
+mod.4.2 = stepAIC(mod.4.1,
+                  direction = "both",
+                  trace = F)
+
+pred = predict(mod.4.2,
+               type = "response",
+               newdata = test.data)
+
+pred.cutoff = factor(ifelse(pred >= 0.5, "Yes", "No"))
+actual = factor(ifelse(test.data$ProdTaken == 1, "Yes", "No"))
+cm = confusionMatrix(pred.cutoff, actual, positive = "Yes")
+accuracy = cm$overall[1]
+sensitivity = cm$byClass[1]
+specificity = cm$byClass[2]
+
+a = c("Accuracy",
+      "Sensitivity",
+      "Specificity",
+      "Total")
+b = c(accuracy,
+      sensitivity,
+      specificity,
+      sum(accuracy, sensitivity, specificity)) %>% 
+  unname() %>% 
+  round(3)
+data.frame(a, b) %>% 
+  rename("Index" = "a",
+         "Value" = "b") %>% 
+  kbl(align = "l",
+      caption = "Without Cross Validation / Cutoff in 0.500") %>% 
+  kable_classic("hover")
+```
+
+The first model is without cross validation and with setting up a cutoff by default as 0.500. However, due to the data imbalance, this can be the cause to get a bad model. 
+
+```{r}
+perform.fn = function(cutoff){
+  pred.temp = factor(ifelse(pred >= cutoff, "Yes", "No"))
+  actual.temp = factor(ifelse(test.data$ProdTaken == 1, "Yes", "No"))
+  cm = confusionMatrix(pred.temp, actual.temp, positive = "Yes")
+  accuray = cm$overall[1]
+  sensitivity = cm$byClass[1]
+  specificity = cm$byClass[2]
+  out = t(as.matrix(c(sensitivity, specificity, accuray))) 
+  colnames(out) = c("sensitivity", "specificity", "accuracy")
+  return(out)}
+
+s = seq(0.01, 0.99, length = 100)
+out = matrix(1, 100, 3)
+for(i in 1:100){
+  out[i,] = perform.fn(s[i])} 
+
+# plot(s, out[, 1], col = 2, lwd = 2, 
+#      type = "l", axes = T, 
+#      xlab = "Cutoff", ylab = "Value")
+# lines(s, out[,2], col = "darkgreen", lwd = 2)
+# lines(s, out[,3], col = 4, lwd = 2)
+# legend("right", 
+#        col = c(2, "darkgreen", 4, "darkred"), 
+#        text.font = 3, 
+#        inset = 0.02, 
+#        box.lty = 0, 
+#        cex = 0.8, 
+#        lwd = c(2, 2, 2, 2), 
+#        c("Sensitivity", "Specificity", "Accuracy"))
+cutoff = s[which(abs(out[,1]-out[,2]) < 0.01)]
+# abline(v = cutoff, col = "black", lwd = 1, lty = 3)
+
+pred.cutoff = factor(ifelse(pred >= cutoff, "Yes", "No"))
+actual = factor(ifelse(test.data$ProdTaken == 1, "Yes", "No"))
+cm = confusionMatrix(pred.cutoff, actual, positive = "Yes")
+accuracy = cm$overall[1]
+sensitivity = cm$byClass[1]
+specificity = cm$byClass[2]
+
+a = c("Accuracy",
+      "Sensitivity",
+      "Specificity",
+      "Total")
+b = c(accuracy,
+      sensitivity,
+      specificity,
+      sum(accuracy, sensitivity, specificity)) %>% 
+  unname() %>% 
+  round(3)
+data.frame(a, b) %>% 
+  rename("Index" = "a",
+         "Value" = "b") %>% 
+  kbl(align = "l",
+      caption = "Without Cross Validation / Cutoff in 0.188") %>% 
+  kable_classic("hover")
+```
+
+The second model is without cross validation but with tunning for the cutoff value as 0.188. Although the accuracy decreases, the overall score increases, especially for the sensitivity. The sensitivity which is also called recall is the interested target prediction rate, which is about the "yes" or "1" status in this case. So, we should care about sensitivity as well but not just go blindly for accuracy.
+
+```{r}
+df.2 = ROSE(data = df.1,
+            seed = 123,
+            ProdTaken ~ .)$data
+
+set.seed(123)
+split = createDataPartition(df.2$ProdTaken, p = 0.8, list = F)
+train.data = df.2[split, ]
+test.data = df.2[-split, ]
+
+mod.4.3 = glm(data = train.data,
+              ProdTaken ~ 
+                MonthlyIncome +
+                Designation +
+                OwnCar + 
+                Passport +
+                PreferredPropertyStar + 
+                DurationOfPitch + 
+                CityTier +
+                Age +
+                NumberOfFollowups + 
+                NumberOfChildrenVisiting +
+                PitchSatisfactionScore,
+              family = "binomial")
+
+mod.4.4 = stepAIC(mod.4.3,
+                  direction = "both",
+                  trace = F)
+
+pred = predict(mod.4.4,
+               type = "response",
+               newdata = test.data)
+
+pred.cutoff = factor(ifelse(pred >= 0.5, "Yes", "No"))
+actual = factor(ifelse(test.data$ProdTaken == 1, "Yes", "No"))
+cm = confusionMatrix(pred.cutoff, actual, positive = "Yes")
+accuracy = cm$overall[1]
+sensitivity = cm$byClass[1]
+specificity = cm$byClass[2]
+
+a = c("Accuracy",
+      "Sensitivity",
+      "Specificity",
+      "Total")
+b = c(accuracy,
+      sensitivity,
+      specificity,
+      sum(accuracy, sensitivity, specificity)) %>% 
+  unname() %>% 
+  round(3)
+data.frame(a, b) %>% 
+  rename("Index" = "a",
+         "Value" = "b") %>% 
+  kbl(align = "l",
+      caption = "With Cross Validation / Cutoff in 0.500") %>% 
+  kable_classic("hover")
+```
+
+As for the cross validation, we use the ROSE (Random Over Sampling Examples) function to balance the data. Without tunning for the cutoff, the accuracy or the overall score is not better than the last model. Then, we proceed to the next model which is tuned for its cutoff.
+
+```{r}
+s = seq(0.01, 0.99, length = 100)
+out = matrix(1, 100, 3)
+for(i in 1:100){
+  out[i,] = perform.fn(s[i])} 
+
+# plot(s, out[, 1], col = 2, lwd = 2, 
+#      type = "l", axes = T, 
+#      xlab = "Cutoff", ylab = "Value")
+# lines(s, out[,2], col = "darkgreen", lwd = 2)
+# lines(s, out[,3], col = 4, lwd = 2)
+# legend("right", 
+#        col = c(2, "darkgreen", 4, "darkred"), 
+#        text.font = 3, 
+#        inset = 0.02, 
+#        box.lty = 0, 
+#        cex = 0.8, 
+#        lwd = c(2, 2, 2, 2), 
+#        c("Sensitivity", "Specificity", "Accuracy"))
+cutoff = s[which(abs(out[,1]-out[,2]) < 0.025)]
+# abline(v = cutoff, col = "black", lwd = 1, lty = 3)
+
+pred.cutoff = factor(ifelse(pred >= cutoff, "Yes", "No"))
+actual = factor(ifelse(test.data$ProdTaken == 1, "Yes", "No"))
+cm = confusionMatrix(pred.cutoff, actual, positive = "Yes")
+accuracy = cm$overall[1]
+sensitivity = cm$byClass[1]
+specificity = cm$byClass[2]
+
+a = c("Accuracy",
+      "Sensitivity",
+      "Specificity",
+      "Total")
+b = c(accuracy,
+      sensitivity,
+      specificity,
+      sum(accuracy, sensitivity, specificity)) %>% 
+  unname() %>% 
+  round(3)
+data.frame(a, b) %>% 
+  rename("Index" = "a",
+         "Value" = "b") %>% 
+  kbl(align = "l",
+      caption = "With Cross Validation / Cutoff in 0.485") %>% 
+  kable_classic("hover")
+```
+
+The last model is even worse. The performance is worse in not only the accuracy but also the total value.
+
+```{r}
+mod.sum = summary(mod.4.2)
+
+mod.sum.df = mod.sum$coefficients %>%
+  as.data.frame() %>% 
+  dplyr::select(Estimate, `Pr(>|z|)`) %>% 
+  mutate(Estimate = round(Estimate, 4)) %>% 
+  rename("P.value" = `Pr(>|z|)`) %>% 
+  filter(P.value < 0.05) %>% 
+  rownames_to_column(var = "Variable")
+
+Des = c("The customer has a passport",
+        "Executive designation of the customer in the current organization",
+        "City tier depends on the development of a city, population, facilities, and living standards",
+        "Total number of followups has been done by the salesperson after the sales pitch",
+        "Preferred hotel property rating by customer",
+        "Sales pitch satisfaction score",
+        "Duration of the pitch by a salesperson to the customer",
+        "Gross monthly income of the customer",
+        "Age of customer")
+
+mod.sum.df %>% 
+  arrange(desc(Estimate)) %>% 
+  filter(Variable != "(Intercept)") %>% 
+  dplyr::select(-P.value) %>%
+  add_column(Description = Des) %>%
+  kbl(align = "l",
+      caption = "Significantly Effect Factors") %>%
+  kable_classic("hover")
+```
+
+Based on the total value, the second model has the best performance. We will choose the second model with no cross validation and tuned cutoff. Then, what are the factors that are significantly related to product taken decision? We know the result from above table. Take the most positive and negative one as examples. As having a passport, customers are more likely to accept the offer based on the estimate greater than zero. This is statistically significant at 0.05. On the other hand, as having an older age, customers are more unlikely to accept the offer based on the estimate lesser than zero. This is statistically significant at 0.05. Therefore, based on the analysis, we find the best prediction model for its prediction and also know the casuation from its model analysis.
+
+# 6 Conclusion
+
+Firstly, we know the acceptance rate in each feature without a significant test but just a rough picture. We also find out that the customers who are taken the offer have a lower monthly income, which is against the common statement that customers who have a higher income trip more frequently. The popular taken offer type is the basic package, which might be due to the cheap price. The customer position is related to its salary. However, the most taken offer customers work in the position of executive. The agency should invent the package and target the audience with a higher monthly income to increase the revenue. Then, we do the model analysis to know the prediction and causation. As for the original product, the agency can have a more accurate way to promote or advertise to the target audience, which should give the agency a more successful sale condition. As for the new product, the agency can search or develop to target new audiences that they are not interested in the agency product before.
+
+# 7 Reference
+
+- [Dataset / 2021 / Susant_Achary](https://t.ly/D1k2t.ly/lGEW)
+- [Reference / 2021 / Dionisius Widjayanto](https://t.ly/D1k2)
+- [Analysis / 2021 / bioedu19](https://t.ly/fzqq)
